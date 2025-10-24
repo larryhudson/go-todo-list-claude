@@ -37,9 +37,7 @@ docs: ## Generate OpenAPI documentation
 clean: ## Clean build artifacts
 	rm -rf bin/ docs/ coverage.out todos.db
 
-dev: docs run ## Generate docs and run server
-
-dev-server: docs ## Start both backend and frontend dev servers with logging
+dev: docs ## Start both backend and frontend dev servers with logging
 	@mkdir -p .logs
 	hivemind Procfile 2>&1 | tee dev-server.log
 
