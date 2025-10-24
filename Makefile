@@ -38,10 +38,44 @@ clean: ## Clean build artifacts
 	rm -rf bin/ docs/ coverage.out todos.db
 
 dev: docs ## Start both backend and frontend dev servers with logging
+	@if [ -f .dev-server.pid ]; then \
+		PID=$$(cat .dev-server.pid); \
+		if ps -p $$PID > /dev/null 2>&1; then \
+			echo "Dev server is already running (PID: $$PID)"; \
+			echo "Use 'make dev-logs' to view logs or 'make dev-stop' to stop it"; \
+			exit 1; \
+		else \
+			echo "Cleaning up stale pidfile..."; \
+			rm -f .dev-server.pid; \
+		fi; \
+	fi
 	@mkdir -p .logs
-	hivemind Procfile 2>&1 | tee dev-server.log
+	@echo "Starting dev server..."
+	@nohup hivemind Procfile > dev-server.log 2>&1 & echo $$! > .dev-server.pid
+	@echo "Dev server started (PID: $$(cat .dev-server.pid))"
+	@echo "Use 'make dev-logs' to view logs or 'make dev-stop' to stop it"
+
+dev-stop: ## Stop the dev server
+	@if [ ! -f .dev-server.pid ]; then \
+		echo "No dev server pidfile found. Server may not be running."; \
+		exit 1; \
+	fi
+	@PID=$$(cat .dev-server.pid); \
+	if ps -p $$PID > /dev/null 2>&1; then \
+		echo "Stopping dev server (PID: $$PID)..."; \
+		kill $$PID; \
+		rm -f .dev-server.pid; \
+		echo "Dev server stopped"; \
+	else \
+		echo "Dev server process (PID: $$PID) not found. Cleaning up pidfile..."; \
+		rm -f .dev-server.pid; \
+	fi
 
 dev-logs: ## Tail the dev server logs (with ANSI color codes stripped)
+	@if [ ! -f dev-server.log ]; then \
+		echo "No dev server log file found. Has the dev server been started?"; \
+		exit 1; \
+	fi
 	tail -f dev-server.log | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g'
 
 check-all: ## Run all linters, formatters, and type checks (backend + frontend)

@@ -32,3 +32,6 @@ docs/
 
 # Logs
 *.log
+
+# Dev server
+.dev-server.pid
