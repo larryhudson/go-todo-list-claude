@@ -11,6 +11,15 @@ if [ -n "$CLAUDE_ENV_FILE" ]; then
   echo "✓ Go environment configured (GOTOOLCHAIN=local)"
 fi
 
+# Install hivemind if not already installed
+if ! command -v hivemind &>/dev/null; then
+  echo "Installing hivemind..."
+  go install github.com/DarthSim/hivemind@latest &>/dev/null
+  echo "✓ hivemind installed successfully"
+else
+  echo "✓ hivemind already installed"
+fi
+
 # Check if we're in a project with a frontend directory
 if [ -d "frontend" ]; then
   cd frontend || exit 1
