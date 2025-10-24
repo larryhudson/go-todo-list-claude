@@ -1,32 +1,40 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
   enable:
-    - gofmt
     - govet
     - errcheck
     - staticcheck
     - unused
-    - gosimple
     - ineffassign
-    - typecheck
     - bodyclose
-    - noctx
-    - gosec
     - copyloopvar
+    - gosec
     - misspell
-
-linters-settings:
-  gofmt:
-    simplify: true
-
-  gosec:
-    excludes:
-      - G404 # Allow weak random number generator for non-crypto use
-
+    - noctx
+  settings:
+    gosec:
+      excludes:
+        - G404
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

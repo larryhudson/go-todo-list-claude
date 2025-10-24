@@ -1,9 +1,15 @@
 #!/bin/bash
 
-# SessionStart hook to set up tsgo (TypeScript native Go compiler)
+# SessionStart hook to set up development environment
 # This runs when Claude Code starts a new session
 
 cd "$CLAUDE_PROJECT_DIR" || exit 1
+
+# Set Go environment variables for the session
+if [ -n "$CLAUDE_ENV_FILE" ]; then
+  echo 'export GOTOOLCHAIN=local' >> "$CLAUDE_ENV_FILE"
+  echo "✓ Go environment configured (GOTOOLCHAIN=local)"
+fi
 
 # Check if we're in a project with a frontend directory
 if [ -d "frontend" ]; then
