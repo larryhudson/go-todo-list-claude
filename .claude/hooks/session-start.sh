@@ -8,7 +8,19 @@ cd "$CLAUDE_PROJECT_DIR" || exit 1
 # Set Go environment variables for the session
 if [ -n "$CLAUDE_ENV_FILE" ]; then
   echo 'export GOTOOLCHAIN=local' >> "$CLAUDE_ENV_FILE"
-  echo "✓ Go environment configured (GOTOOLCHAIN=local)"
+  # Add Go bin directory to PATH for go-installed tools
+  GOBIN=$(go env GOPATH)/bin
+  echo "export PATH=\"\$PATH:$GOBIN\"" >> "$CLAUDE_ENV_FILE"
+  echo "✓ Go environment configured (GOTOOLCHAIN=local, PATH includes Go bin)"
+fi
+
+# Install hivemind if not already installed
+if ! command -v hivemind &>/dev/null; then
+  echo "Installing hivemind..."
+  go install github.com/DarthSim/hivemind@latest &>/dev/null
+  echo "✓ hivemind installed successfully"
+else
+  echo "✓ hivemind already installed"
 fi
 
 # Check if we're in a project with a frontend directory
