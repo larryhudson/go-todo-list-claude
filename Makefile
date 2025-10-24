@@ -10,6 +10,7 @@ install: ## Install dependencies
 	go mod download
 	go install github.com/swaggo/swag/cmd/swag@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install github.com/DarthSim/hivemind@latest
 
 build: ## Build the server binary
 	go build -o bin/server ./cmd/server
@@ -37,6 +38,13 @@ clean: ## Clean build artifacts
 	rm -rf bin/ docs/ coverage.out todos.db
 
 dev: docs run ## Generate docs and run server
+
+dev-server: docs ## Start both backend and frontend dev servers with logging
+	@mkdir -p .logs
+	hivemind Procfile 2>&1 | tee dev-server.log
+
+dev-logs: ## Tail the dev server logs
+	tail -f dev-server.log
 
 check-all: ## Run all linters, formatters, and type checks (backend + frontend)
 	@echo "Running backend checks..." && $(MAKE) lint & \
