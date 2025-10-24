@@ -37,9 +37,7 @@ docs: ## Generate OpenAPI documentation
 clean: ## Clean build artifacts
 	rm -rf bin/ docs/ coverage.out todos.db
 
-dev: docs run ## Generate docs and run server
-
-dev-server: docs ## Start both backend and frontend dev servers with logging
+dev: docs ## Start both backend and frontend dev servers with logging
 	@if [ -f .dev-server.pid ]; then \
 		PID=$$(cat .dev-server.pid); \
 		if ps -p $$PID > /dev/null 2>&1; then \
