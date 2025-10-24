@@ -3,6 +3,7 @@ package models
 import "time"
 
 // Todo represents a todo item in the system
+// This model is used throughout the application for todo management
 type Todo struct {
 	ID          int64     `json:"id"`
 	Title       string    `json:"title"`
