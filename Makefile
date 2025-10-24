@@ -43,8 +43,8 @@ dev-server: docs ## Start both backend and frontend dev servers with logging
 	@mkdir -p .logs
 	hivemind Procfile 2>&1 | tee dev-server.log
 
-dev-logs: ## Tail the dev server logs
-	tail -f dev-server.log
+dev-logs: ## Tail the dev server logs (with ANSI color codes stripped)
+	tail -f dev-server.log | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g'
 
 check-all: ## Run all linters, formatters, and type checks (backend + frontend)
 	@echo "Running backend checks..." && $(MAKE) lint & \
