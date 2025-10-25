@@ -11,6 +11,7 @@ install: ## Install dependencies
 	go install github.com/swaggo/swag/cmd/swag@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install github.com/DarthSim/hivemind@latest
+	cd frontend && npm install
 
 build: ## Build the server binary
 	go build -o bin/server ./cmd/server

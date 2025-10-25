@@ -14,27 +14,22 @@ if [ -n "$CLAUDE_ENV_FILE" ]; then
   echo "✓ Go environment configured (GOTOOLCHAIN=local, PATH includes Go bin)"
 fi
 
-# Install hivemind if not already installed
-if ! command -v hivemind &>/dev/null; then
-  echo "Installing hivemind..."
-  go install github.com/DarthSim/hivemind@latest &>/dev/null
-  echo "✓ hivemind installed successfully"
+# Install all dependencies (backend and frontend)
+echo "Installing dependencies..."
+if make install &>/dev/null; then
+  echo "✓ All dependencies installed successfully"
 else
-  echo "✓ hivemind already installed"
+  echo "⚠ Warning: Some dependencies may not have installed correctly"
 fi
 
-# Check if we're in a project with a frontend directory
-if [ -d "frontend" ]; then
-  cd frontend || exit 1
-
-  # Check if tsgo is already installed
-  if ! npm list @typescript/native-preview &>/dev/null; then
-    echo "Installing @typescript/native-preview (tsgo)..."
-    npm install --save-dev @typescript/native-preview &>/dev/null
-    echo "✓ tsgo installed successfully"
-  else
-    echo "✓ tsgo already installed"
-  fi
+# Start the dev server automatically
+echo "Starting dev server..."
+if make dev 2>&1 | grep -q "already running"; then
+  echo "✓ Dev server already running"
+else
+  echo "✓ Dev server started"
+  echo "  Use 'make dev-logs' to view logs"
+  echo "  Use 'make dev-stop' to stop the server"
 fi
 
 # Return success
