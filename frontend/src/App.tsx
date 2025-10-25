@@ -1,103 +1,103 @@
-import { useState, useEffect } from 'react';
-import { TodosApi } from './generated/api/src/apis';
-import type { ModelsTodo } from './generated/api/src/models';
-import './App.css';
+import { useState, useEffect } from 'react'
+import { TodosApi } from './generated/api/src/apis'
+import type { ModelsTodo } from './generated/api/src/models'
+import './App.css'
 
-const api = new TodosApi();
+const api = new TodosApi()
 
 function App() {
   // State for managing todos
-  const [todos, setTodos] = useState<ModelsTodo[]>([]);
-  const [newTodoTitle, setNewTodoTitle] = useState('');
-  const [newTodoDescription, setNewTodoDescription] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [todos, setTodos] = useState<ModelsTodo[]>([])
+  const [newTodoTitle, setNewTodoTitle] = useState('')
+  const [newTodoDescription, setNewTodoDescription] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // State for filtering
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterCompleted, setFilterCompleted] = useState<'all' | 'completed' | 'incomplete'>('all');
-  const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'title'>('createdAt');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCompleted, setFilterCompleted] = useState<'all' | 'completed' | 'incomplete'>('all')
+  const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'title'>('createdAt')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   const fetchTodos = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true)
+      setError(null)
       const response = await api.apiTodosGet({
         search: searchTerm || undefined,
         completed: filterCompleted === 'all' ? undefined : filterCompleted === 'completed',
         sortBy,
         sortOrder,
-      });
-      setTodos(response || []);
+      })
+      setTodos(response || [])
     } catch (err) {
-      setError('Failed to fetch todos');
-      console.error(err);
+      setError('Failed to fetch todos')
+      console.error(err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    fetchTodos();
-  }, [searchTerm, filterCompleted, sortBy, sortOrder]);
+    fetchTodos()
+  }, [searchTerm, filterCompleted, sortBy, sortOrder])
 
   const handleAddTodo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTodoTitle.trim()) return;
+    e.preventDefault()
+    if (!newTodoTitle.trim()) return
 
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true)
+      setError(null)
       await api.apiTodosPost({
         todo: {
           title: newTodoTitle,
           description: newTodoDescription,
         },
-      });
-      setNewTodoTitle('');
-      setNewTodoDescription('');
-      await fetchTodos();
+      })
+      setNewTodoTitle('')
+      setNewTodoDescription('')
+      await fetchTodos()
     } catch (err) {
-      setError('Failed to create todo');
-      console.error(err);
+      setError('Failed to create todo')
+      console.error(err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleToggleComplete = async (todo: ModelsTodo) => {
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true)
+      setError(null)
       await api.apiTodosIdPatch({
         id: todo.id!,
         todo: {
           completed: !todo.completed,
         },
-      });
-      await fetchTodos();
+      })
+      await fetchTodos()
     } catch (err) {
-      setError('Failed to update todo');
-      console.error(err);
+      setError('Failed to update todo')
+      console.error(err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleDeleteTodo = async (id: number) => {
     try {
-      setLoading(true);
-      setError(null);
-      await api.apiTodosIdDelete({ id });
-      await fetchTodos();
+      setLoading(true)
+      setError(null)
+      await api.apiTodosIdDelete({ id })
+      await fetchTodos()
     } catch (err) {
-      setError('Failed to delete todo');
-      console.error(err);
+      setError('Failed to delete todo')
+      console.error(err)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
     <div className="app">
@@ -200,7 +200,7 @@ function App() {
         )}
       </div>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

@@ -11,8 +11,8 @@
     "test:coverage": "vitest --coverage",
     "lint": "oxlint src",
     "typecheck": "tsgo --noEmit",
-    "format": "prettier --write src",
-    "format:check": "prettier --check src",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "check": "npm-run-all --parallel lint format:check typecheck",
     "preview": "vite preview",
     "generate:api": "npx @openapitools/openapi-generator-cli generate -i ../docs/swagger.json -g typescript-fetch -o src/generated/api --additional-properties=supportsES6=true,npmName=todo-api-client,npmVersion=1.0.0"
