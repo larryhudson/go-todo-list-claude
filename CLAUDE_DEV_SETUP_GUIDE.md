@@ -288,34 +288,40 @@ chmod +x .claude/hooks/*.sh
 
 **Important**: The automatic linting hooks described above are just **Layer 1** of a complete quality strategy. For production-grade code, you should implement multiple layers of checks, each with different performance characteristics and blocking behavior.
 
-#### The Four Layers
+#### The Five Layers
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Layer 1: Fast Checks (Hooks)                               │
-│ ├─ Triggered: On every file change                         │
-│ ├─ Speed: < 1 second                                       │
-│ ├─ Blocking: NO - warnings only                            │
-│ └─ Examples: Basic formatting, obvious syntax errors       │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 2: Pre-commit Checks                                 │
-│ ├─ Triggered: Before git commit                            │
-│ ├─ Speed: < 30 seconds                                     │
-│ ├─ Blocking: YES - commit fails if checks fail             │
-│ └─ Examples: Full linting, type checking, unit tests       │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 3: CI/CD Checks                                      │
-│ ├─ Triggered: On git push or PR                            │
-│ ├─ Speed: 1-10 minutes                                     │
-│ ├─ Blocking: YES - PR cannot merge if checks fail          │
-│ └─ Examples: Integration tests, security scans, builds     │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 4: Human Review                                      │
-│ ├─ Triggered: During PR review                             │
-│ ├─ Speed: Hours to days                                    │
-│ ├─ Blocking: YES - requires approval to merge              │
-│ └─ Examples: Architecture, logic, UX, security concerns    │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│ Layer 1: Fast Checks (Hooks)                                 │
+│ ├─ Triggered: On every file change                           │
+│ ├─ Speed: < 1 second                                         │
+│ ├─ Blocking: NO - warnings only                              │
+│ └─ Examples: Auto-formatting, basic syntax validation        │
+├───────────────────────────────────────────────────────────────┤
+│ Layer 2: Pre-commit Checks                                   │
+│ ├─ Triggered: Before git commit                              │
+│ ├─ Speed: < 30 seconds                                       │
+│ ├─ Blocking: YES - commit fails if checks fail               │
+│ └─ Examples: Full linting, type checking, fast unit tests    │
+├───────────────────────────────────────────────────────────────┤
+│ Layer 3: CI/CD Checks                                        │
+│ ├─ Triggered: On git push or PR                              │
+│ ├─ Speed: 1-10 minutes                                       │
+│ ├─ Blocking: YES - PR cannot merge if checks fail            │
+│ └─ Examples: Full test suite, security scans, builds         │
+├───────────────────────────────────────────────────────────────┤
+│ Layer 3.5: Automated LLM Review (Optional)                   │
+│ ├─ Triggered: After CI passes                                │
+│ ├─ Speed: 1-5 minutes                                        │
+│ ├─ Blocking: OPTIONAL - can be informational or required     │
+│ └─ Examples: Pattern consistency, simplicity, edge cases     │
+├───────────────────────────────────────────────────────────────┤
+│ Layer 4: Human Review                                        │
+│ ├─ Triggered: During PR review                               │
+│ ├─ Speed: Hours to days                                      │
+│ ├─ Blocking: YES - requires approval to merge                │
+│ └─ Examples: Architecture, business logic, strategic tradeoffs│
+└───────────────────────────────────────────────────────────────┘
 ```
 
 #### Layer 1: Fast Checks (PostToolUse Hooks)
@@ -586,9 +592,188 @@ build:
 
 ---
 
+#### Layer 3.5: Automated LLM Review
+
+**Purpose**: Catch issues that deterministic tools miss but don't require human judgment.
+
+**Characteristics**:
+- **Speed**: 1-5 minutes (runs after CI passes)
+- **Blocking**: OPTIONAL (can be informational or blocking)
+- **Coverage**: CONTEXTUAL (understands codebase patterns)
+
+**What LLM review catches**:
+- ✅ **Unnecessary complexity** - Is this the simplest approach?
+- ✅ **Pattern violations** - Does this follow existing patterns in the codebase?
+- ✅ **Inconsistent naming** - Does this match naming conventions used elsewhere?
+- ✅ **Missing edge cases** - Based on similar code, what scenarios are unhandled?
+- ✅ **Code duplication** - Could this reuse existing utilities?
+- ✅ **API design issues** - Is this interface consistent with the rest of the API?
+- ✅ **Documentation gaps** - Are complex sections unexplained?
+- ✅ **Test coverage gaps** - Are critical paths untested?
+
+**Tools**:
+- **Claude Code GitHub Action** - Automated PR reviews using Claude
+- **OpenAI GPT-4 Actions** - Similar capability with GPT-4
+- **Custom review bots** - Self-hosted LLM review pipelines
+
+**Example: Claude Code GitHub Action**
+
+Add to `.github/workflows/claude-review.yml`:
+
+```yaml
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    # Only run after CI passes
+    needs: [lint, test, build]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch full history for context
+
+      - name: Claude Code Review
+        uses: anthropics/claude-code-review-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Provide codebase context
+          include_files: |
+            CLAUDE.md
+            ARCHITECTURE.md
+            docs/**/*.md
+          # Focused review prompts
+          review_focus: |
+            - Does this follow existing patterns in the codebase?
+            - Is this the simplest solution to the problem?
+            - Are there obvious edge cases that aren't handled?
+            - Is the naming consistent with similar code?
+            - Could this reuse existing utilities instead of duplicating code?
+          # Make it non-blocking but visible
+          post_comments: true
+          require_approval: false
+```
+
+**Example: Custom Review Prompt**
+
+You can customize what the LLM focuses on:
+
+```yaml
+review_focus: |
+  Review this PR with the following criteria:
+
+  1. **Simplicity**: Is this the simplest approach? Flag unnecessary abstractions.
+  2. **Patterns**: Compare with files in src/services/* - does this follow the same patterns?
+  3. **Error handling**: Check against CLAUDE.md guidelines - is error handling consistent?
+  4. **Testing**: Are the test cases comprehensive compared to similar features?
+  5. **Performance**: Are there obvious performance issues (N+1 queries, missing indexes)?
+  6. **Security**: Any potential security issues (SQL injection, XSS, auth bypass)?
+
+  Be specific in feedback - reference file names and line numbers.
+  If code looks good, say so explicitly.
+```
+
+**Benefits over deterministic checks**:
+- **Context-aware**: Understands project-specific patterns that aren't easily encoded in linter rules
+- **Simplicity enforcement**: Can identify overcomplicated solutions that technically work but are unnecessarily complex
+- **Learning from codebase**: Compares new code against existing examples to ensure consistency
+- **Natural language feedback**: Explains *why* something is an issue, not just *that* it's an issue
+
+**Benefits over human review**:
+- **Instant feedback**: Runs in minutes, not hours/days
+- **Always available**: No need to wait for reviewer availability
+- **Consistent**: Applies the same standards every time
+- **Scales**: Can review unlimited PRs without reviewer fatigue
+- **Filters issues**: Catches simple problems so humans can focus on complex decisions
+
+**What LLM review should NOT replace**:
+- ❌ Deterministic checks (linting, type checking) - use CI for these
+- ❌ Critical security reviews - humans should verify security-sensitive changes
+- ❌ Architectural decisions - humans better understand business context
+- ❌ Final approval - humans should have final say
+
+**Configuration strategies**:
+
+1. **Informational mode** (recommended to start):
+   - LLM posts review comments
+   - Does not block merging
+   - Team learns what it catches
+
+2. **Advisory mode**:
+   - LLM review required but can be dismissed
+   - Human can override if LLM is wrong
+   - Good for established projects
+
+3. **Blocking mode** (use carefully):
+   - PR cannot merge without LLM approval
+   - Only for mature projects with well-defined patterns
+   - Requires escape hatch for emergencies
+
+**Example LLM review output**:
+
+```
+🤖 Claude Code Review
+
+## ✅ Looks Good
+- Error handling follows the pattern from `src/services/auth.go`
+- Test coverage is comprehensive (95% of new code)
+- Naming is consistent with existing API endpoints
+
+## ⚠️ Suggestions
+
+### Potential Simplification (src/handlers/user.go:45-67)
+This validation logic could reuse the existing `validateUserInput()`
+function from `src/utils/validation.go:23` instead of duplicating it.
+
+### Missing Edge Case (src/handlers/user.go:78)
+Similar endpoints like `CreatePost()` handle the case where the user
+is soft-deleted. Should this endpoint check `user.DeletedAt`?
+
+### Pattern Inconsistency (src/handlers/user.go:89)
+Other handlers in this package return errors using `handleError()`
+helper. This directly returns `http.Error()`. Suggest using the helper
+for consistency.
+
+---
+Overall: Good PR! The suggestions above are minor - the core logic is solid.
+```
+
+**Integration with other layers**:
+
+```
+Layer 3 (CI/CD)         ──> Deterministic checks pass
+         │
+         ├──> All tests green ✅
+         ├──> Linting clean ✅
+         ├──> Build succeeds ✅
+         │
+         ▼
+Layer 3.5 (LLM Review)  ──> Contextual review
+         │
+         ├──> Checks against codebase patterns
+         ├──> Validates simplicity
+         ├──> Suggests improvements
+         │
+         ▼
+Layer 4 (Human Review)  ──> Final judgment
+         │
+         ├──> Architecture decisions
+         ├──> Business logic verification
+         └──> Approval to merge
+```
+
+**Key principle**: Each layer filters out increasingly subtle issues, so humans can focus their expertise where it matters most - on architectural decisions, business logic correctness, and strategic tradeoffs that require domain knowledge.
+
+---
+
 #### Layer 4: Human Review
 
-**Purpose**: Catch issues that cannot be automated.
+**Purpose**: Final judgment on issues that require human expertise and business context.
 
 **Characteristics**:
 - **Speed**: Hours to days
@@ -643,20 +828,25 @@ build:
 3. **Layer 3 (1-10 min)**: Developer pushes, CI runs comprehensive checks
    - ❌ "Integration test failed" → Must fix before merge
 
-4. **Layer 4 (hours/days)**: Reviewer examines the PR
+4. **Layer 3.5 (1-5 min)**: LLM reviews the PR after CI passes
+   - 💡 "This could reuse the existing `validateUser()` utility" → Suggestion for simplification
+
+5. **Layer 4 (hours/days)**: Human reviewer examines the PR
    - 💬 "This approach won't scale, consider caching" → Architecture feedback
 
 **Each layer catches different issues**:
 
-| Issue Type | Layer 1 | Layer 2 | Layer 3 | Layer 4 |
-|------------|---------|---------|---------|---------|
-| Formatting | ✅ | ✅ | ✅ | - |
-| Syntax errors | ⚠️ | ✅ | ✅ | - |
-| Type errors | - | ✅ | ✅ | - |
-| Failing tests | - | ⚠️ | ✅ | - |
-| Security vulns | - | ⚠️ | ✅ | ✅ |
-| Logic errors | - | - | ⚠️ | ✅ |
-| Architecture issues | - | - | - | ✅ |
+| Issue Type | Layer 1 | Layer 2 | Layer 3 | Layer 3.5 | Layer 4 |
+|------------|---------|---------|---------|-----------|---------|
+| Formatting | ✅ | ✅ | ✅ | - | - |
+| Syntax errors | ⚠️ | ✅ | ✅ | - | - |
+| Type errors | - | ✅ | ✅ | - | - |
+| Failing tests | - | ⚠️ | ✅ | - | - |
+| Security vulns | - | ⚠️ | ✅ | ⚠️ | ✅ |
+| Logic errors | - | - | ⚠️ | ⚠️ | ✅ |
+| Pattern violations | - | - | - | ✅ | ✅ |
+| Unnecessary complexity | - | - | - | ✅ | ✅ |
+| Architecture issues | - | - | - | ⚠️ | ✅ |
 
 **Legend**: ✅ Catches reliably | ⚠️ Sometimes catches | - Doesn't check
 
@@ -672,15 +862,25 @@ build:
    - Layer 3: CI with tests
    - Layer 4: Self-review checklist
 
-2. **Team projects**:
-   - All 4 layers fully configured
-   - Required PR approvals
-   - Protected branches
+2. **Team projects** (small to medium):
+   - Layer 1: Fast hooks
+   - Layer 2: Pre-commit (comprehensive)
+   - Layer 3: CI with full test suite
+   - Layer 3.5: Optional LLM review (informational mode)
+   - Layer 4: Required human PR approvals
 
-3. **Open source**:
-   - All 4 layers
+3. **Team projects** (large scale):
+   - All 5 layers fully configured
+   - Layer 3.5: LLM review in advisory mode (can be dismissed)
+   - Protected branches with required reviews
+   - CODEOWNERS for critical paths
+
+4. **Open source**:
+   - All 5 layers
+   - Layer 3.5: LLM review helps maintainers triage
    - Multiple CI providers (GitHub Actions + CircleCI)
    - Extensive documentation requirements
+   - Community contribution guidelines
 
 **Keep Layer 1 fast**:
 - ⏱️ Target: < 1 second total
@@ -951,11 +1151,36 @@ Use this checklist when setting up a new project:
   - [ ] Add lint/format targets
   - [ ] Ensure all targets work from project root
 
+- [ ] **Layered Quality Checks**
+  - [ ] **Layer 1 (Hooks)**: Already configured above
+  - [ ] **Layer 2 (Pre-commit)**:
+    - [ ] Install pre-commit framework or equivalent
+    - [ ] Create `.pre-commit-config.yaml`
+    - [ ] Configure hooks for linting, type checking, tests
+    - [ ] Run `pre-commit install`
+    - [ ] Test pre-commit with `pre-commit run --all-files`
+  - [ ] **Layer 3 (CI/CD)**:
+    - [ ] Create `.github/workflows/ci.yml` or equivalent
+    - [ ] Configure lint, test, security, and build jobs
+    - [ ] Set up branch protection rules
+    - [ ] Verify CI runs on PRs
+  - [ ] **Layer 3.5 (LLM Review)** (Optional):
+    - [ ] Set up Claude Code GitHub Action or equivalent
+    - [ ] Configure review focus prompts
+    - [ ] Add ANTHROPIC_API_KEY secret
+    - [ ] Test on a sample PR
+  - [ ] **Layer 4 (Human Review)**:
+    - [ ] Create PR template with review checklist
+    - [ ] Configure required approvals
+    - [ ] Set up CODEOWNERS if needed
+
 - [ ] **Testing**
   - [ ] Test full workflow: `make dev` → edit file → check logs → verify linting
   - [ ] Test session start hook
   - [ ] Test lint-file hook with different file types
   - [ ] Verify dev server auto-starts correctly
+  - [ ] Test pre-commit blocks bad commits
+  - [ ] Verify CI runs and blocks bad PRs
 
 ---
 
