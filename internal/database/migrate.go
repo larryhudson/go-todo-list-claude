@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"sort"
@@ -72,14 +73,14 @@ func (m *Migrator) createMigrationsTable() error {
 			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)
 	`
-	_, err := m.db.Exec(query)
+	_, err := m.db.ExecContext(context.Background(), query)
 	return err
 }
 
 // getAppliedMigrations returns a set of already applied migration filenames
 func (m *Migrator) getAppliedMigrations() (map[string]bool, error) {
 	query := "SELECT filename FROM schema_migrations"
-	rows, err := m.db.Query(query)
+	rows, err := m.db.QueryContext(context.Background(), query)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +110,10 @@ func (m *Migrator) applyMigration(filename string) error {
 		return fmt.Errorf("failed to read migration file: %w", err)
 	}
 
+	ctx := context.Background()
+
 	// Begin transaction
-	tx, err := m.db.Begin()
+	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -123,13 +126,13 @@ func (m *Migrator) applyMigration(filename string) error {
 	}()
 
 	// Execute migration SQL
-	if _, err = tx.Exec(string(content)); err != nil {
+	if _, err = tx.ExecContext(ctx, string(content)); err != nil {
 		return fmt.Errorf("failed to execute migration SQL: %w", err)
 	}
 
 	// Record migration as applied
 	query := "INSERT INTO schema_migrations (filename) VALUES (?)"
-	if _, err = tx.Exec(query, filename); err != nil {
+	if _, err = tx.ExecContext(ctx, query, filename); err != nil {
 		return fmt.Errorf("failed to record migration: %w", err)
 	}
 

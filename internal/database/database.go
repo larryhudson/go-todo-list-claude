@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -19,7 +20,7 @@ func New(dataSourceName string) (*DB, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(context.Background()); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -42,7 +43,7 @@ func (db *DB) Initialize() error {
 	CREATE INDEX IF NOT EXISTS idx_todos_created_at ON todos(created_at);
 	`
 
-	_, err := db.Exec(schema)
+	_, err := db.ExecContext(context.Background(), schema)
 	if err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
 	}
