@@ -7,6 +7,7 @@
 package main
 
 import (
+	"embed"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +16,9 @@ import (
 	"github.com/larryhudson/go-todo-list-claude/internal/database"
 	"github.com/larryhudson/go-todo-list-claude/internal/handlers"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 // corsMiddleware adds CORS headers to responses
 func corsMiddleware(next http.Handler) http.Handler {
@@ -50,8 +54,10 @@ func main() {
 		}
 	}()
 
-	if err := db.Initialize(); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+	// Run migrations
+	migrator := database.NewMigrator(db, migrationsFS)
+	if err := migrator.Run(); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Create repository and handler
