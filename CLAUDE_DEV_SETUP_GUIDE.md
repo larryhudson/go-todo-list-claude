@@ -284,6 +284,424 @@ chmod +x .claude/hooks/*.sh
 
 ---
 
+### 2.5. Layered Code Quality Strategy
+
+**Important**: The automatic linting hooks described above are just **Layer 1** of a complete quality strategy. For production-grade code, you should implement multiple layers of checks, each with different performance characteristics and blocking behavior.
+
+#### The Four Layers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 1: Fast Checks (Hooks)                               │
+│ ├─ Triggered: On every file change                         │
+│ ├─ Speed: < 1 second                                       │
+│ ├─ Blocking: NO - warnings only                            │
+│ └─ Examples: Basic formatting, obvious syntax errors       │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 2: Pre-commit Checks                                 │
+│ ├─ Triggered: Before git commit                            │
+│ ├─ Speed: < 30 seconds                                     │
+│ ├─ Blocking: YES - commit fails if checks fail             │
+│ └─ Examples: Full linting, type checking, unit tests       │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 3: CI/CD Checks                                      │
+│ ├─ Triggered: On git push or PR                            │
+│ ├─ Speed: 1-10 minutes                                     │
+│ ├─ Blocking: YES - PR cannot merge if checks fail          │
+│ └─ Examples: Integration tests, security scans, builds     │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 4: Human Review                                      │
+│ ├─ Triggered: During PR review                             │
+│ ├─ Speed: Hours to days                                    │
+│ ├─ Blocking: YES - requires approval to merge              │
+│ └─ Examples: Architecture, logic, UX, security concerns    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Layer 1: Fast Checks (PostToolUse Hooks)
+
+**Purpose**: Catch obvious mistakes immediately with near-zero latency.
+
+**Characteristics**:
+- **Speed**: < 1 second (must be fast to not disrupt development)
+- **Blocking**: NO (should warn but not prevent Claude from continuing)
+- **Auto-fix**: YES (apply formatters automatically)
+
+**What to include**:
+- ✅ Code formatting (prettier, black, gofmt, rustfmt)
+- ✅ Basic syntax validation
+- ✅ Import sorting
+- ✅ Trailing whitespace removal
+- ✅ Simple style violations that can be auto-fixed
+
+**What to exclude**:
+- ❌ Slow type checking (> 1 second)
+- ❌ Running tests
+- ❌ Complex static analysis
+- ❌ Compilation/build steps
+
+**Example configuration**:
+
+```makefile
+lint-file-fast: ## Fast linting for hooks (< 1 second)
+	@if echo "$(FILE)" | grep -q '\.go$$'; then \
+		gofmt -w -s "$(FILE)" 2>&1; \
+		# Skip golangci-lint here - too slow for hooks
+	elif echo "$(FILE)" | grep -qE '\.(ts|tsx)$$'; then \
+		npx prettier --write "$(FILE)" 2>&1; \
+		# Skip tsc here - too slow for hooks
+	elif echo "$(FILE)" | grep -q '\.py$$'; then \
+		black "$(FILE)" 2>&1; \
+		isort "$(FILE)" 2>&1; \
+		# Skip pylint/mypy here - too slow for hooks
+	fi
+```
+
+**Hook configuration** (non-blocking):
+
+```bash
+#!/bin/bash
+# .claude/hooks/lint-file.sh
+
+FILE=$(cat | jq -r ".tool_input.file_path")
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# Run fast checks only
+LINT_OUTPUT=$(make lint-file-fast FILE="$FILE" 2>&1)
+
+# Return warnings but don't block
+if [ -n "$LINT_OUTPUT" ]; then
+  jq -n --arg ctx "⚠️  Quick lint feedback:\n$LINT_OUTPUT" '{
+    hookSpecificOutput: {
+      hookEventName: "PostToolUse",
+      additionalContext: $ctx
+    }
+  }'
+else
+  echo "{}"
+fi
+```
+
+---
+
+#### Layer 2: Pre-commit Checks
+
+**Purpose**: Prevent broken code from entering git history.
+
+**Characteristics**:
+- **Speed**: < 30 seconds (acceptable to wait before commit)
+- **Blocking**: YES (commit should fail if checks fail)
+- **Auto-fix**: OPTIONAL (can auto-fix and re-stage)
+
+**What to include**:
+- ✅ Full linting (eslint, pylint, golangci-lint)
+- ✅ Type checking (tsc, mypy, flow)
+- ✅ Unit tests (fast tests only)
+- ✅ Code formatting verification
+- ✅ Dependency vulnerability checks (basic)
+- ✅ Secret scanning (prevent committing credentials)
+
+**Tools**:
+- **pre-commit** (Python) - Multi-language framework
+- **husky** (Node.js) - Git hooks for npm projects
+- **lefthook** (Go) - Fast git hooks manager
+- **git hooks** - Native git hook scripts
+
+**Example with pre-commit framework**:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: format
+        name: Format code
+        entry: make format-all
+        language: system
+        pass_filenames: false
+
+      - id: lint
+        name: Lint code
+        entry: make lint-all
+        language: system
+        pass_filenames: false
+
+      - id: type-check
+        name: Type check
+        entry: make type-check
+        language: system
+        pass_filenames: false
+
+      - id: test-fast
+        name: Run fast unit tests
+        entry: make test-fast
+        language: system
+        pass_filenames: false
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.0
+    hooks:
+      - id: gitleaks
+```
+
+**Installation**:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Test it
+pre-commit run --all-files
+```
+
+**Makefile targets for pre-commit**:
+
+```makefile
+format-all: ## Format all code
+	gofmt -w -s ./...
+	cd frontend && npx prettier --write .
+
+lint-all: ## Lint all code
+	golangci-lint run ./...
+	cd frontend && npx eslint src/
+
+type-check: ## Type check all code
+	cd frontend && npx tsc --noEmit
+
+test-fast: ## Run fast unit tests only
+	go test -short ./...
+	cd frontend && npm run test:unit
+```
+
+---
+
+#### Layer 3: CI/CD Checks
+
+**Purpose**: Comprehensive validation before merging to main branch.
+
+**Characteristics**:
+- **Speed**: 1-10 minutes (acceptable for CI pipeline)
+- **Blocking**: YES (PR cannot merge if CI fails)
+- **Coverage**: COMPREHENSIVE (test everything)
+
+**What to include**:
+- ✅ All Layer 2 checks (lint, type check, format verification)
+- ✅ Full test suite (unit + integration + e2e)
+- ✅ Code coverage requirements (e.g., > 80%)
+- ✅ Security scanning (SAST, dependency vulnerabilities)
+- ✅ Build verification (ensure it compiles/builds)
+- ✅ Docker image builds
+- ✅ License compliance checks
+- ✅ Performance benchmarks (optional)
+
+**Example GitHub Actions workflow**:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run linters
+        run: make lint-all
+
+  type-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Type check
+        run: make type-check
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run full test suite
+        run: make test
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run security scan
+        run: |
+          npm audit --audit-level=high
+          go list -json -m all | nancy sleuth
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build application
+        run: make build
+      - name: Build Docker image
+        run: docker build -t myapp:${{ github.sha }} .
+```
+
+**Example GitLab CI**:
+
+```yaml
+# .gitlab-ci.yml
+stages:
+  - lint
+  - test
+  - security
+  - build
+
+lint:
+  stage: lint
+  script:
+    - make lint-all
+
+test:
+  stage: test
+  script:
+    - make test
+  coverage: '/coverage: \d+\.\d+/'
+
+security:
+  stage: security
+  script:
+    - make security-scan
+
+build:
+  stage: build
+  script:
+    - make build
+```
+
+---
+
+#### Layer 4: Human Review
+
+**Purpose**: Catch issues that cannot be automated.
+
+**Characteristics**:
+- **Speed**: Hours to days
+- **Blocking**: YES (requires approval)
+- **Scope**: High-level concerns
+
+**What humans review**:
+- ✅ **Architecture decisions** - Is this the right approach?
+- ✅ **Logic correctness** - Does the algorithm make sense?
+- ✅ **Edge cases** - Are all scenarios handled?
+- ✅ **User experience** - Is the UI/API intuitive?
+- ✅ **Security implications** - Could this be exploited?
+- ✅ **Performance concerns** - Will this scale?
+- ✅ **Maintainability** - Is this code readable?
+- ✅ **Documentation** - Are comments/docs adequate?
+- ✅ **Test coverage** - Are the right scenarios tested?
+- ✅ **Naming** - Are names clear and consistent?
+
+**PR Review Checklist** (add to `PULL_REQUEST_TEMPLATE.md`):
+
+```markdown
+## Pre-merge Checklist
+
+### Automated Checks
+- [ ] All CI checks passing
+- [ ] Code coverage maintained or improved
+- [ ] No security vulnerabilities introduced
+
+### Human Review
+- [ ] Architecture reviewed and approved
+- [ ] Logic correctness verified
+- [ ] Edge cases identified and handled
+- [ ] User experience considered
+- [ ] Performance implications assessed
+- [ ] Code is maintainable and well-documented
+- [ ] Tests cover critical paths
+- [ ] No obvious security issues
+```
+
+---
+
+#### How the Layers Work Together
+
+**Example workflow when Claude makes a change**:
+
+1. **Layer 1 (< 1s)**: Hook formats the file, Claude sees quick feedback
+   - ⚠️ "Line too long" → Claude can ignore or fix
+
+2. **Layer 2 (< 30s)**: Developer commits, pre-commit runs full lint
+   - ❌ "Type error on line 45" → Commit blocked, must fix
+
+3. **Layer 3 (1-10 min)**: Developer pushes, CI runs comprehensive checks
+   - ❌ "Integration test failed" → Must fix before merge
+
+4. **Layer 4 (hours/days)**: Reviewer examines the PR
+   - 💬 "This approach won't scale, consider caching" → Architecture feedback
+
+**Each layer catches different issues**:
+
+| Issue Type | Layer 1 | Layer 2 | Layer 3 | Layer 4 |
+|------------|---------|---------|---------|---------|
+| Formatting | ✅ | ✅ | ✅ | - |
+| Syntax errors | ⚠️ | ✅ | ✅ | - |
+| Type errors | - | ✅ | ✅ | - |
+| Failing tests | - | ⚠️ | ✅ | - |
+| Security vulns | - | ⚠️ | ✅ | ✅ |
+| Logic errors | - | - | ⚠️ | ✅ |
+| Architecture issues | - | - | - | ✅ |
+
+**Legend**: ✅ Catches reliably | ⚠️ Sometimes catches | - Doesn't check
+
+---
+
+#### Practical Configuration Strategy
+
+**Start simple, add layers as needed**:
+
+1. **Minimum viable setup** (for solo projects):
+   - Layer 1: Fast hooks (formatting only)
+   - Layer 2: Pre-commit with basic linting
+   - Layer 3: CI with tests
+   - Layer 4: Self-review checklist
+
+2. **Team projects**:
+   - All 4 layers fully configured
+   - Required PR approvals
+   - Protected branches
+
+3. **Open source**:
+   - All 4 layers
+   - Multiple CI providers (GitHub Actions + CircleCI)
+   - Extensive documentation requirements
+
+**Keep Layer 1 fast**:
+- ⏱️ Target: < 1 second total
+- 🎯 Focus: Auto-fixable issues only
+- ⚠️ Non-blocking: Never fail, only warn
+- 🚀 Benefit: Claude gets instant feedback without disruption
+
+**Make Layer 2 comprehensive**:
+- ⏱️ Target: < 30 seconds total
+- 🎯 Focus: Everything that should never reach main branch
+- 🚫 Blocking: Prevent commits that would fail CI
+- 💰 Benefit: Save CI time and cost
+
+**Make Layer 3 thorough**:
+- ⏱️ Target: < 10 minutes total
+- 🎯 Focus: Everything automated
+- 🔒 Blocking: Gate to production
+- 🏆 Benefit: Confidence before merge
+
+---
+
 ### 3. Project Guidelines with CLAUDE.md
 
 **Problem**: Claude Code doesn't know project-specific conventions, common pitfalls, or the preferred development workflow.
