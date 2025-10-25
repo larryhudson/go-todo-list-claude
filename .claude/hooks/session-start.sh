@@ -22,5 +22,15 @@ else
   echo "⚠ Warning: Some dependencies may not have installed correctly"
 fi
 
+# Start the dev server automatically
+echo "Starting dev server..."
+if make dev 2>&1 | grep -q "already running"; then
+  echo "✓ Dev server already running"
+else
+  echo "✓ Dev server started"
+  echo "  Use 'make dev-logs' to view logs"
+  echo "  Use 'make dev-stop' to stop the server"
+fi
+
 # Return success
 echo "{}"
