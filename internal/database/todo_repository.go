@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -29,7 +30,7 @@ func (r *TodoRepository) Create(req models.CreateTodoRequest) (*models.Todo, err
 	now := time.Now()
 	var todo models.Todo
 
-	err := r.db.QueryRow(query, req.Title, req.Description, now, now).Scan(
+	err := r.db.QueryRowContext(context.Background(), query, req.Title, req.Description, now, now).Scan(
 		&todo.ID,
 		&todo.Title,
 		&todo.Description,
@@ -53,7 +54,7 @@ func (r *TodoRepository) GetAll() ([]models.Todo, error) {
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.db.Query(query)
+	rows, err := r.db.QueryContext(context.Background(), query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query todos: %w", err)
 	}
@@ -138,7 +139,7 @@ func (r *TodoRepository) Search(opts FilterOptions) ([]models.Todo, error) {
 
 	query += fmt.Sprintf(` ORDER BY %s %s`, sortBy, sortOrder)
 
-	rows, err := r.db.Query(query, args...)
+	rows, err := r.db.QueryContext(context.Background(), query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query todos: %w", err)
 	}
@@ -181,7 +182,7 @@ func (r *TodoRepository) GetByID(id int64) (*models.Todo, error) {
 	`
 
 	var todo models.Todo
-	err := r.db.QueryRow(query, id).Scan(
+	err := r.db.QueryRowContext(context.Background(), query, id).Scan(
 		&todo.ID,
 		&todo.Title,
 		&todo.Description,
@@ -231,7 +232,7 @@ func (r *TodoRepository) Update(id int64, req models.UpdateTodoRequest) (*models
 	query += " WHERE id = ?"
 	args = append(args, id)
 
-	_, err = r.db.Exec(query, args...)
+	_, err = r.db.ExecContext(context.Background(), query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update todo: %w", err)
 	}
@@ -243,7 +244,7 @@ func (r *TodoRepository) Update(id int64, req models.UpdateTodoRequest) (*models
 // Delete deletes a todo by ID
 func (r *TodoRepository) Delete(id int64) error {
 	query := "DELETE FROM todos WHERE id = ?"
-	result, err := r.db.Exec(query, id)
+	result, err := r.db.ExecContext(context.Background(), query, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete todo: %w", err)
 	}
