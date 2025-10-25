@@ -109,7 +109,7 @@ lint-file: ## Lint and format a single file (requires FILE=path/to/file)
 		fi; \
 		cd frontend && npx prettier --write "$$FILE_REL" 2>&1 > /dev/null && npx tsgo --jsx react-jsx --noEmit "$$FILE_REL" || true; \
 	else \
-		echo "Unsupported file type: $(FILE)"; \
+		true; \
 	fi
 
 .DEFAULT_GOAL := help
